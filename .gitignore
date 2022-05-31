@@ -1,0 +1,4 @@
+/.git
+/venv
+/.idea
+/threads/__pycache__
