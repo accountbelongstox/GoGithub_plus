@@ -1,71 +1,110 @@
 import json
+from queue import Queue
 import threading
+from tkinter import N
 import urllib
 import threading
 from concurrent.futures import ThreadPoolExecutor,as_completed
 import os
 import re
 
-class unit_world_ping(threading.Thread):
-    
-    def __init__(self,name,web_dict,result_website_ips_queue,cookie,headers,ping_website):
-        threading.Thread.__init__(self,name=name)
-        self.web_dict = web_dict
-        self.__result_website_ips_queue = result_website_ips_queue
-        self.__cookie = cookie
-        self.__name = name
-        self.__headers = headers
-        self.__ping_website = ping_website
 
-    def run(self):
-        domain = self.web_dict["domain"]
-        guid = self.web_dict["guid"]
-        token = self.web_dict["token"]
-        url_ = f'{self.__ping_website}/pingcheck?host={domain}&guid={guid}&token={token}'
-        handler = urllib.request.HTTPCookieProcessor(self.__cookie)
+class WorldPingTest():
+    __thread_pool = None
+    __resultQueue = None
+
+    
+    def __init__(self):
+        if self.__resultQueue == None:
+            print(" 新建 Queue < WorldPingTest")
+            self.__resultQueue = Queue()
+        pass
+        
+
+    def ping_test(self,the_website_ips):
+        self.max_workers = len(the_website_ips)
+        if self.max_workers == 0:
+            print(" no task at thread_pool。")
+            return 
+        if self.__thread_pool == None :
+            print(" 新建线程池 thread_pool。")
+            self.__thread_pool = ThreadPoolExecutor(max_workers=self.max_workers)
+        else:
+            print(" 复用 thread_pool。")
+
+        thread_runIndes = 1
+        tasks = []
+        domain = ""
+        for dict_ in the_website_ips:
+            domain = dict_["domain"]
+            guid = dict_["guid"]
+            token = dict_["token"]
+            dict_["thread_id"] = thread_runIndes
+            task = self.__thread_pool.submit(self.ping_run, dict_ )
+            thread_runIndes += 1
+            tasks.append(task)
+        print(f" Started test-points to Thread pool are {thread_runIndes -1 } | {domain} ")
+        done_id = 1
+        for task in tasks:
+            r = task.result()
+            done_id += 1
+        self.__thread_pool.shutdown(wait=True)
+        print(f"\n Threads executing done. Test result are {self.__resultQueue.qsize()}")
+        return self.__resultQueue
+
+                
+    def ping_run(self,web_ips):
+        cookie = web_ips["cookie"]
+        headers = web_ips["headers"]
+        domain = web_ips["domain"]
+        url = web_ips["url"]
+        handler = urllib.request.HTTPCookieProcessor(cookie)
         opener = urllib.request.build_opener(handler)
-        opener.addheaders = self.__headers
-        resp = opener.open( url_ )
+        opener.addheaders = headers
+        resp = opener.open( url )
         result = resp.read().decode('utf-8')
         res_json = json.loads(result)
-        #
-        # print(f" Threading  : {self.__name} guid = {guid} token = {token} ",res_json)
-        
-        if res_json["code"] == 1:
-            self.__result_website_ips_queue.put(res_json)
-        else:
-            print(f" error(unique test): {self.__name} ： {res_json}")
+        res_json["domain"] = domain
+        self.__resultQueue.put(res_json)
+        print(f"\r the Test-point done. processing ： {self.__resultQueue.qsize()} / {self.max_workers}",end="")
+        return res_json
 
 
-class batch_cmd_ping():
-    def __init__(self,ips,result_website_ips_queue):
-        self.__max_thread = len(ips)
-        self.__result_website_ips_queue = result_website_ips_queue
-        if self.__max_thread > 0 :
-            with ThreadPoolExecutor(max_workers=self.__max_thread) as threadPool:
+class BatchCmdPing():
+    __resultQueue = None
+    
+    def __init__(self):
+        if self.__resultQueue == None:
+            print(" 新建 Queue < BatchCmdPing。")
+            self.__resultQueue = Queue()
+        pass
+    
+    def cmd_pint(self,ips):
+        max_workers = len(ips)
+        if max_workers > 0 :
+            with ThreadPoolExecutor(max_workers=max_workers) as threadPool:
                 thread_pools = []
-                for ip in ips:
-                    future_ = threadPool.submit(self.run,ip)
+                for ipi in ips:
+                    future_ = threadPool.submit(self.cmd_ping_run,ipi)
                     thread_pools.append(future_)
 
                 for future in as_completed(thread_pools):
                     result = future.result()
-                    self.__result_website_ips_queue.put({
-                        "ip":ip,
-                        "ms":result
-                    })
+                    if result != None:
+                        self.__resultQueue.put(result)
                 threadPool.shutdown(wait=True)
-  
-    def run(self,ip):
+        return self.__resultQueue
+
+    def cmd_ping_run(self,ipi):
+        domain = ipi["domain"]
+        ip = ipi["address"]
         cmd = f"ping {ip}"
         outs = os.popen(cmd,'r')
         out = outs.read()
-        
         get_time = re.compile(r"time\=(\d+)")
         time_group = re.findall(get_time,out)
         time_outs = re.compile(r"request\s+timed\s+out",re.I)
         time_outs_group = re.findall(time_outs,out)
-
         time_group = [int(t) for t in time_group]
         #如果有 Request time out 
         time_outs_group = [1000 for t in time_outs_group]
@@ -74,6 +113,21 @@ class batch_cmd_ping():
         timeout = 0
         for t in time_group :
             timeout += t
-        timeout = timeout // len(time_group)
-        print(f"timeout {ip} -> {timeout}")
-        return timeout
+        divint = len(time_group)
+        is_NotFound_mianhost = False
+        if divint ==0:
+            is_NotFound_mianhost = True
+            divint = 1
+        timeout = timeout // divint
+        # print(f" ping {domain} {ip} {timeout}ms")
+        if is_NotFound_mianhost:
+            ping_result = None
+            print("Error:",ipi,outs)
+        else:
+            ping_result = {
+                            "address":ip,
+                            "ipAddress":ipi["ipAddress"],
+                            "timeout":timeout,
+                            "domain":domain
+                        }
+        return ping_result

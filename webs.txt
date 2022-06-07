@@ -1,3 +1,4 @@
+cn.bing.com
 alive.github.com
 live.github.com
 github.githubassets.com
@@ -36,6 +37,6 @@ pipelines.actions.githubusercontent.com
 media.githubusercontent.com
 cloud.githubusercontent.com
 objects.githubusercontent.com
-www.scrapy.com
+www.scrapy.org
 
 
