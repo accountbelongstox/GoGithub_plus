@@ -81,6 +81,11 @@ class GoGitHub():
 
         self.ping_cmd_and_write_hosts(result_ips_queue)
 
+    def copilottest():
+        
+        pass
+    #GetInt
+    
 
     def ping_cmd_and_write_hosts(self,result_queue):
         ips = []

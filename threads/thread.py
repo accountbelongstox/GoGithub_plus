@@ -1,6 +1,5 @@
 import json
 from queue import Queue
-import threading
 from tkinter import N
 import urllib
 import threading
@@ -16,12 +15,12 @@ class WorldPingTest():
     
     def __init__(self):
         if self.__resultQueue == None:
-            print(" 新建 Queue < WorldPingTest")
+            print(" 新建 Queue < WorldPingTest。")
             self.__resultQueue = Queue()
         pass
         
 
-    def ping_test(self,the_website_ips):
+    def ping_test(self, the_website_ips):
         self.max_workers = len(the_website_ips)
         if self.max_workers == 0:
             print(" no task at thread_pool。")
